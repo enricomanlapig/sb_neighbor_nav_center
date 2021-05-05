@@ -1,0 +1,1205 @@
+---
+title: "Neighborhood Navigation Center"
+subtitle: Alameda Park, Santa Barbara
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    social: menu
+runtime: shiny
+resource_files:
+- .Renviron
+---
+
+```{r colors}
+westmont_colors <-  c("#9D2235", # Red
+                      "#63666A", # Grey
+                      "#CEB888", # Sand
+                      "#00B398", # Green
+                      "#004F71", # Blue
+                      "#A1561C",
+                      "#D50032", 
+                      "#D29F13", # Gold
+                      "#A1D6CA",
+                      "#A7BDB1",
+                      "#8B6F4E",
+                      "#8A8D8F",
+                      "#D9D9D6",
+                      "#A7A8AA")
+westmont_red <- I("#9D2235")
+westmont_green <- I("#00B398")
+westmont_grey <- I("#63666A")
+westmont_sand <- I("#CEB888")
+westmont_blue <- I("#004F71")
+westmont_gold <- I("#D29F13")
+outline_color <- "grey50"
+```
+
+
+```{r libraries, include=FALSE}
+library("flexdashboard")
+library("readxl")
+library("forcats")
+library("plotly")
+library("shiny") 
+library("httr")
+library("dplyr")
+library("tidyr")
+library("tools")
+library("lubridate")
+```
+
+
+
+
+
+```{r get_data, include = FALSE}
+url <- paste0(Sys.getenv("kobo_path"),
+              Sys.getenv("kobo_data_file"),
+              sep = "")
+
+kobo_xl <- "neighborhood_nav.xlsx"
+
+GET(url,
+    write_disk(kobo_xl, overwrite = TRUE),
+    authenticate(Sys.getenv("kobo_username"),
+                 Sys.getenv("kobo_password")))
+
+df_data <- read_excel(path = path.expand(kobo_xl))
+```
+
+
+
+
+```{r rename_variables}
+names(df_data) <- gsub("organization_group/", "", names(df_data))
+names(df_data) <- gsub("healthcare_group/med_encounters_group/", "", names(df_data))
+names(df_data) <- gsub("healthcare_group/health_volunteer_group/", "", names(df_data))
+names(df_data) <- gsub("healthcare_group/med_mental_group/", "", names(df_data))
+names(df_data) <- gsub("exits_group/", "", names(df_data))
+names(df_data) <- gsub("shelter_group/", "", names(df_data))
+names(df_data) <- gsub("hygiene_group/", "", names(df_data))
+names(df_data) <- gsub("case_mgmt_group/", "", names(df_data))
+names(df_data) <- gsub("animal_group/", "", names(df_data))
+names(df_data) <- gsub("wrapping_up_group/", "", names(df_data))
+names(df_data) <- gsub("clothing_group/", "", names(df_data))
+names(df_data) <- gsub("meals_group/", "", names(df_data))
+names(df_data) <- gsub("meal_role/", "", names(df_data))
+names(df_data) <- gsub("coordinator_group/", "", names(df_data))
+names(df_data) <- gsub("weather/", "", names(df_data))
+
+
+
+v_weather_levels <- c("cold", "comfortable", "warm", "rainy", "foggy", "smokey", "unknown")
+v_warming_station_levels <- c("yes", "no", "unknown")
+v_service_categories <- c("animals", "clothing", "case_mgmt", "coordinator", "healthcare", "meals", "hygiene", "exits", "other_service")
+
+df_data %>%
+  mutate(survey_date = round_date(df_data$survey_date, unit = "week", week_start = 4),
+         weather = factor(weather, levels = v_weather_levels),
+         warming_station = factor(warming_station, levels = v_warming_station_levels),
+         survey_date = as.Date(survey_date, "%m/%d/%y", tz ="America/Los_Angeles"),
+         start = as.Date(start, "%m/%d/%y", tz ="America/Los_Angeles"),
+         end = as.Date(end, "%m/%d/%y", tz ="America/Los_Angeles"),
+         organization_name = case_when(
+           organization_name == "animal_care_not_listed" ~ organization_name_not_listed,
+           organization_name == "clothing_not_listed" ~ organization_name_not_listed,
+           organization_name == "case_mgmt_not_listed" ~ organization_name_not_listed,
+           organization_name == "coordinator_not_listed" ~ organization_name_not_listed,
+           organization_name == "healthcare_not_listed" ~ organization_name_not_listed,
+           organization_name == "meals_not_listed" ~ organization_name_not_listed,
+           organization_name == "hygiene_not_listed" ~ organization_name_not_listed,
+           organization_name == "exits_not_listed" ~ organization_name_not_listed,
+           organization_name == "other_service_not_listed" ~ organization_name_not_listed,
+           TRUE ~ organization_name),
+         organization_name = tolower(organization_name),
+         organization_name = gsub(" ", "_", organization_name),
+         organization_name = case_when(
+           organization_name == "westmont" ~ "westmont_college",
+           TRUE ~ organization_name),
+         organization_service = as.factor(organization_service),
+         organization_name = as.factor(organization_name)
+  ) -> df_data
+
+
+df_data %>%
+  filter(organization_service == "coordinator")  %>%
+  
+  group_by(survey_date) %>%
+  
+  summarise(
+    coord_warming_station = last(warming_station, order_by = end),
+    coord_cold = last(cold, order_by = end),
+    coord_comfortable = last(comfortable, order_by = end),
+    coord_warm = last(warm, order_by = end),
+    coord_rainy = last(rainy, order_by = end),
+    coord_foggy = last(foggy, order_by = end),
+    coord_smokey = last(smokey, order_by = end),
+    coord_weather = last(weather, order_by = end)) %>%
+  
+  right_join(df_data, by = "survey_date") %>%
+  
+  replace_na(list(coord_warming_station = "unknown",
+                  coord_weather = "unknown")) %>%
+  
+  mutate(warming_station = coord_warming_station,
+         weather = coord_weather,
+         cold = coord_cold,
+         comfortable = coord_comfortable,
+         warm = coord_warm,
+         rainy = coord_rainy,
+         foggy = coord_foggy,
+         smokey = coord_smokey) -> df_data
+
+
+
+```
+
+```{r remove_duplicate_surveys}
+df_data %>% 
+  unique() %>%
+  group_by(survey_date, organization_service, organization_name) %>%
+  filter(today == max(today, na.rm = TRUE)) %>%
+  ungroup() -> df_data
+```
+
+
+
+```{r filter_fuction, include = FALSE}
+fn_filter_weather <- function(my_df){
+  my_df %>%
+    filter(
+        (cold == TRUE & "cold" %in% input$input_weather) |
+          (comfortable == TRUE & "comfortable" %in% input$input_weather) |
+          (warm == TRUE & "warm" %in% input$input_weather) |
+          (rainy == TRUE & "rainy" %in% input$input_weather) |
+          (foggy == TRUE & "foggy" %in% input$input_weather) |
+          (smokey == TRUE & "smokey" %in% input$input_weather) |
+          (weather == "unknown" & "unknown" %in% input$input_weather),
+        warming_station %in% input$input_warming_station)
+}
+
+
+
+fn_filter_dates <- function(my_df){
+  my_df %>%
+    filter(survey_date >= input$input_date_range[1],
+           survey_date <= input$input_date_range[2])
+}
+```
+
+
+
+
+```{r graphing_options, include = FALSE}
+xaxis_options <- list(
+  title = FALSE,
+  autotick = FALSE,
+  showticklabels = TRUE,
+  tickangle = 45,
+  gridcolor = "ghostwhite",
+  type = 'date', 
+  ticklabelmode = "instant",
+  tick0=as.Date("2000-01-13"),
+  dtick = 86400000.0 * 14 # Time between ticks in millisecs (1 day)
+) 
+
+yaxis_options <- list(
+  title = "Count",
+  rangemode = "tozero",
+  gridcolor = "ghostwhite")
+
+legend_options <- list(orientation = "h",
+                       x = 0.5,
+                       y = -0.2)
+```
+
+
+
+```{r my_functions}
+fn_mov_avg <- function(my_vector, window_width) {
+    as.vector(stats::filter(my_vector, 
+                            rep(1/window_width, window_width), 
+                            sides=1));
+}
+
+fn_value_box <- function(my_df, input_var){
+  input_var <- enquo(input_var)
+  my_df %>%
+    fn_filter_weather() %>%
+    fn_filter_dates() %>%
+    select(survey_date, !!input_var) %>%
+    summarise(my_sum = sum(!!input_var, na.rm = TRUE)) %>%
+    as.numeric()
+}
+
+
+fn_time_series_subplots <- function(my_data, my_x_var, my_count_var, my_ma_var,
+                                    my_count_tooltip,
+                                    my_mov_avg_tooltip){
+    my_x_var <- enquo(my_x_var)
+    my_count_var <- enquo(my_count_var)
+    my_ma_var <- enquo(my_ma_var)
+    my_count_tooltip <- enquo(my_count_tooltip)
+    my_mov_avg_tooltip <- enquo(my_mov_avg_tooltip)
+    
+    my_data %>%
+    plot_ly(x = my_x_var, 
+            y = my_count_var,
+            type = "scatter",
+            mode = "markers",
+            color = westmont_grey,
+            text = my_count_tooltip,
+            hoverinfo = "text",
+            name = "Value") %>%
+    add_lines(y = my_ma_var, 
+              line = list(width = 4),
+              color = westmont_red, 
+              text = my_mov_avg_tooltip,
+              hoverinfo = "text",
+              name = "4 week moving average") %>%
+    layout(xaxis = xaxis_options, 
+           yaxis = yaxis_options, 
+           legend = legend_options) -> p1
+  
+  my_data %>%
+    plot_ly(y = my_count_var,
+            type = "box",
+            color = westmont_grey,
+            opacity = 0.5,
+            showlegend = FALSE,
+            name = "Distribution",
+            boxpoints = FALSE) %>%
+    layout(xaxis = list(showticklabels = FALSE))-> p2
+  
+  subplot(p1,p2, nrows = 1, margin = 0, 
+          widths = c(0.8, 0.2), shareY = TRUE) %>%
+    plotly::config(displaylogo = FALSE,
+                   modeBarButtons = list(list("toImage")))
+}
+
+fn_time_series_graph <- function(my_df, my_graphing_var, my_filter_expr){
+  
+  my_graphing_var <- enquo(my_graphing_var)
+  my_filter_expr <- if (missing(my_filter_expr)){
+    TRUE} else {
+     enquo(my_filter_expr) 
+    }
+
+  my_df %>%
+    fn_filter_weather() %>%
+    filter(!!my_filter_expr) %>%
+    group_by(survey_date) %>%
+    summarise(my_sum = sum(!!my_graphing_var, na.rm = TRUE)) %>%
+    mutate(my_mov_avg = fn_mov_avg(my_sum, 4),
+           my_sum = ifelse(my_sum == 0, NA, my_sum),
+           my_count_tooltip = paste0("Date: ", survey_date,
+                                     "<br>Count: ", my_sum),
+           my_mov_avg_tooltip = paste0("Date: ", survey_date,
+                                     "<br>4wk avg.: ", round(my_mov_avg, digits = 1))
+           ) %>%
+    fn_filter_dates() -> my_graphing_data
+  
+  fn_time_series_subplots(my_graphing_data, 
+                          survey_date,
+                          my_sum, 
+                          my_mov_avg,
+                          my_count_tooltip,
+                          my_mov_avg_tooltip)
+  
+}
+```
+
+
+
+
+Inputs {.sidebar}
+======================
+
+This dashboard presents data describing the Neighborhood Navigation Center at Alameda Park in Santa Barbara California.  It was built in collaboration with [SBACT](https://sbact.org) and the many organizations that make up the Neighborhood Navigation Center.
+
+### 
+```{r date_input}
+dateRangeInput(inputId = "input_date_range",
+               label = "Date range",
+               start = min(df_data$survey_date))
+```
+
+###
+```{r weather_input}
+checkboxGroupInput(inputId = "input_weather",
+                   label = "Weather",
+                   choices = v_weather_levels,
+                   selected = v_weather_levels)
+```
+
+###
+```{r warming_station_input}
+checkboxGroupInput(inputId = "input_warming_station",
+                   label = "Warming station",
+                   choices = v_warming_station_levels,
+                   selected = v_warming_station_levels)
+```
+
+
+
+
+
+Overview {data-orientation=rows}
+======================
+
+Row 
+-----------------------------------------------------------------------
+
+
+### Meals shared
+```{r}
+renderValueBox({
+  valueBox(fn_value_box(df_data, num_meals),
+           icon = "fa-fish",
+           color = westmont_green)
+})
+```
+
+
+### People received a meal
+```{r}
+renderValueBox({
+  valueBox(fn_value_box(df_data, num_people_in_meal_line),
+           icon = "fa-user-friends",
+           color = westmont_green)
+})
+```
+
+
+
+### People received clothing
+```{r}
+renderValueBox({
+  valueBox(fn_value_box(df_data, num_clothing),
+           icon = "fa-tshirt",
+           color = westmont_green)
+})
+```
+
+### Animals received care
+```{r}
+renderValueBox({
+  valueBox(fn_value_box(df_data, num_animals),
+           icon = "fa-paw",
+           color = westmont_green)
+})
+```
+
+
+
+
+
+
+
+Row 
+-----------------------------------------------------------------------
+
+
+### Medical encounters
+```{r}
+renderValueBox({
+  valueBox(fn_value_box(df_data, num_med_encounters),
+           icon = "fa-user-md",
+           color = westmont_green)
+})
+```
+
+### Showers facilitated
+```{r}
+renderValueBox({
+  valueBox(fn_value_box(df_data, num_showers),
+           icon = "fa-shower",
+           color = westmont_green)
+})
+```
+
+
+### Hygiene kits distributed
+```{r, echo = FALSE}
+renderValueBox({
+  valueBox(fn_value_box(df_data, num_hygiene_kits),
+           icon = "fa-signing",
+           color = westmont_green)
+})
+```
+
+
+### New case management clients
+
+```{r, echo = FALSE}
+renderValueBox({
+  valueBox(fn_value_box(df_data, num_shelter_referrals),
+           icon = "fa-bed",
+           color = westmont_green)
+})
+```
+
+
+### Diversions initiated
+
+```{r, echo = FALSE}
+renderValueBox({
+  valueBox(fn_value_box(df_data, num_diversions_initiated),
+           icon = "fa-rotate-left",
+           color = westmont_green)
+})
+```
+
+
+
+
+
+Row 
+-----------------------------------------------------------------------
+
+### How many volunteers come to the park each week?
+
+```{r}
+renderPlotly({
+  fn_time_series_graph(df_data, num_volunteers)
+})
+```
+
+
+
+### How many organizations come to the park each week?
+
+```{r}
+renderPlotly({
+  df_data %>%
+    fn_filter_weather() %>%
+    group_by(survey_date, organization_name) %>%
+    summarise() %>%
+    group_by(survey_date) %>%
+    summarise(my_sum = n()) %>%
+    mutate(my_mov_avg = fn_mov_avg(my_sum, 4),
+           my_count_tooltip = paste0("Date: ", survey_date,
+                                     "<br>Count: ", my_sum),
+           my_mov_avg_tooltip = paste0("Date: ", survey_date,
+                                     "<br>4wk avg.: ", round(my_mov_avg, digits = 1))
+           ) %>%
+    fn_filter_dates() %>%
+    fn_time_series_subplots(survey_date, my_sum, my_mov_avg, my_count_tooltip, my_mov_avg_tooltip)
+  
+})
+```
+
+
+
+
+
+
+
+Partners {data-orientation=cols}
+======================
+
+
+
+
+### Number of volunteer weeks by partner
+
+```{r}
+renderPlotly({
+  df_data %>%
+    fn_filter_weather() %>%
+    select(survey_date, 
+           my_labels = organization_name, 
+           my_parents = organization_service) %>%
+    
+    group_by(my_labels, my_parents) %>%
+    summarise(my_values = n()) %>%
+    
+    bind_rows(
+      df_data %>% 
+        fn_filter_weather() %>%
+        group_by(organization_service, survey_date) %>%
+        summarise() %>%
+        group_by(my_labels = organization_service) %>%
+        summarise(my_values = n(),
+                  my_parents = "NUMBER OF<br>SERVICE<br>WEEKS")) %>%
+    
+    bind_rows(
+      df_data %>%
+        fn_filter_weather() %>%
+        count(survey_date) %>%
+        summarise(my_values = n(),
+                  my_labels = "NUMBER OF<br>SERVICE<br>WEEKS")) %>%
+  
+    mutate(my_ids = ifelse(my_parents == "other_service", paste(my_labels, my_parents, sep = " - "), my_labels),
+           my_labels = toupper(gsub("_", "<br>", my_labels)),
+           my_parents = toupper(gsub("_", "<br>", my_parents)),
+           my_ids = toupper(gsub("_", "<br>", my_ids))) %>%
+    
+    arrange(my_ids) %>%
+
+    plot_ly(
+      ids = ~my_ids,
+      labels = ~my_labels,
+      parents = ~my_parents,
+      values = ~my_values,
+      type = "sunburst",
+      branchvalues = "relative",
+      sort = FALSE) %>%
+    
+    layout(colorway = westmont_colors,
+           annotations =
+                 list(x = 0.5, 
+                      y = 0, 
+                      text = "Click a sector to expand",
+                      showarrow = FALSE,
+                      font=list(size=15))) %>%
+    
+    plotly::config(displaylogo = FALSE, 
+                   modeBarButtons = list(list("toImage")))
+    
+})
+```
+
+### Weekly volunteers by service and partner
+```{r}
+renderPlotly({
+  df_data %>%
+    fn_filter_weather() %>%
+    fn_filter_dates() %>%
+    select(num_volunteers, 
+           my_labels = organization_name, 
+           my_parents = organization_service) %>%
+    
+    group_by(my_labels, my_parents) %>%
+    summarise(my_values = median(num_volunteers, na.rm = TRUE)) %>%
+    
+    bind_rows(
+      df_data %>% 
+        fn_filter_weather() %>%
+        group_by(survey_date, organization_service) %>%
+        summarise(num_weekly_volunteers = sum(num_volunteers, na.rm = TRUE)) %>%
+        filter(num_weekly_volunteers > 0) %>%
+        group_by(my_labels = organization_service) %>%
+        summarise(my_values = median(num_weekly_volunteers, na.rm = TRUE),
+                  my_parents = "MEDIAN<br>WEEKLY<br>VOLUNTEERS")) %>%
+    
+    bind_rows(
+      df_data %>%
+        fn_filter_weather() %>%
+        group_by(survey_date) %>%
+        summarise(num_weekly_volunteers = sum(num_volunteers, na.rm = TRUE)) %>%
+        filter(num_weekly_volunteers > 0) %>%
+        summarise(my_values = median(num_weekly_volunteers, na.rm = TRUE),
+                  my_labels = "MEDIAN<br>WEEKLY<br>VOLUNTEERS")) %>%
+  
+    mutate(my_ids = ifelse(my_parents == "other_service", paste(my_labels, my_parents, sep = " - "), my_labels),
+           my_labels = toupper(gsub("_", "<br>", my_labels)),
+           my_parents = toupper(gsub("_", "<br>", my_parents)),
+           my_ids = toupper(gsub("_", "<br>", my_ids))) %>%
+    
+    arrange(my_ids) %>%
+
+    plot_ly(
+      ids = ~my_ids,
+      labels = ~my_labels,
+      parents = ~my_parents,
+      values = ~my_values,
+      type = "sunburst",
+      branchvalues = "relative",
+      sort = FALSE) %>%
+    
+    layout(colorway = westmont_colors,
+           annotations =
+                 list(x = 0.5, 
+                      y = 0, 
+                      text = "Click a sector to expand",
+                      showarrow = FALSE,
+                      font=list(size=15))) %>%
+    
+    plotly::config(displaylogo = FALSE, 
+                   modeBarButtons = list(list("toImage")))
+    
+})
+```
+
+
+
+
+Hospitality {data-orientation=rows}
+======================
+
+
+
+
+
+Row 
+-----------------------------------------------------------------------
+
+
+### Meals shared
+
+
+```{r}
+renderPlotly({
+  fn_time_series_graph(df_data, num_meals)
+})
+```
+
+### Bagged meals shared
+
+```{r}
+renderPlotly({
+  fn_time_series_graph(df_data, num_meal_bags)
+})
+```
+
+### People served meals
+
+```{r}
+
+renderPlotly({
+  fn_time_series_graph(df_data, num_people_in_meal_line)
+})
+```
+
+
+
+
+### Meal share volunteers
+
+```{r}
+renderPlotly({
+  fn_time_series_graph(df_data, num_volunteers, organization_service == "meals")
+})
+
+```
+
+
+
+
+
+
+Row 
+-----------------------------------------------------------------------
+
+### Animals cared for
+
+```{r}
+
+renderPlotly({
+  fn_time_series_graph(df_data, num_animals)
+})
+
+
+
+```
+
+
+
+### People receiving clothing
+
+```{r}
+
+renderPlotly({
+  fn_time_series_graph(df_data, num_clothing)
+})
+
+
+```
+
+
+
+### Showers facilitated
+
+```{r}
+
+renderPlotly({
+  fn_time_series_graph(df_data, num_showers)
+})
+
+```
+
+### Hygiene kits shared
+```{r}
+
+renderPlotly({
+  fn_time_series_graph(df_data, num_hygiene_kits)
+})
+
+```
+
+
+Case Management & Exits {data-orientation=rows}
+======================
+
+Row 
+-----------------------------------------------------------------------
+
+
+
+### Number of people served
+
+
+```{r}
+
+renderPlotly({
+  fn_time_series_graph(df_data, num_case_mgmt_served)
+})
+
+```
+
+
+Row 
+-----------------------------------------------------------------------
+
+### Number of clients served
+
+```{r}
+
+renderPlotly({
+  fn_time_series_graph(df_data, num_case_mgmt_clients)
+})
+
+```
+
+
+### Number of non-clients served
+
+```{r}
+
+renderPlotly({
+  fn_time_series_graph(df_data, num_case_mgmt_non_clients)
+})
+
+```
+
+
+
+### Number of new clients
+
+```{r}
+renderPlotly({
+  fn_time_series_graph(df_data, num_case_mgmt_new_clients)
+})
+```
+
+
+
+
+
+
+Medical {data-orientation=rows}
+======================
+
+Row
+-------------------------------------
+
+### Total medical encounters
+
+```{r}
+renderPlotly({
+  fn_time_series_graph(df_data, num_med_encounters, organization_service == "healthcare")
+})
+
+
+
+
+```
+
+Row
+-------------------------------------
+
+
+
+### Encounter demographics
+
+```{r}
+
+
+renderPlotly({
+  df_data %>%
+  fn_filter_weather() %>%
+  fn_filter_dates() %>%
+  filter(organization_service == "healthcare") %>%
+  select(num_med_men, num_med_women) %>%
+  summarise(female = sum(num_med_women, na.rm = TRUE),
+            male = sum(num_med_men, na.rm = TRUE)) %>%
+  pivot_longer(cols = c(female, male),
+               names_to = "my_labels",
+               values_to = "my_values") %>%
+  mutate(my_values = 100*my_values / sum(my_values, na.rm = TRUE),
+               my_tooltips = paste(round(my_values,1), "%")) -> df_p1
+
+df_data %>%
+       fn_filter_weather() %>%
+        fn_filter_dates() %>%
+        filter(organization_service == "healthcare") %>%
+        select(num_med_caucasian, num_med_black, num_med_hispanic) %>%
+        summarise(caucasian = sum(num_med_caucasian, na.rm = TRUE),
+                  black = sum(num_med_black, na.rm = TRUE),
+                  hispanic = sum(num_med_hispanic, na.rm = TRUE)) %>%
+        pivot_longer(cols = c(caucasian, black, hispanic),
+                 names_to = "my_labels",
+                 values_to = "my_values") %>%
+        mutate(my_values = 100*my_values / sum(my_values, na.rm = TRUE),
+               my_tooltips = paste(round(my_values,1), "%")) -> df_p2
+
+df_data %>%
+        fn_filter_weather() %>%
+        fn_filter_dates() %>%
+        filter(organization_service == "healthcare") %>%
+        select(num_med_over_65, num_med_under_65) %>%
+        summarise(`under 65` = sum(num_med_under_65, na.rm = TRUE),
+              `over 65` = sum(num_med_over_65, na.rm = TRUE)) %>%
+        pivot_longer(cols = c(`under 65`, `over 65`),
+                 names_to = "my_labels",
+                 values_to = "my_values") %>%
+        mutate(my_values = round(100*my_values / sum(my_values, na.rm = TRUE),1),
+               my_tooltips = paste(round(my_values,1), "%")) -> df_p3
+
+  plot_ly() %>%
+  add_pie(data = df_p1, labels = ~my_labels, values = ~my_values, name = "gender",
+          domain = list(x = c(0, 0.26), y = c(0.1, 1)), 
+          textinfo='label+percent', insidetextorientation='radial',
+          text = ~my_tooltips, hoverinfo = "text", hole = 0.3) %>%
+  add_pie(data = df_p2, labels = ~my_labels, values = ~my_values, name = "race",
+          domain = list(x = c(0.36, 0.62), y = c(0.1, 1)), 
+          textinfo='label+percent', insidetextorientation='radial',
+          text = ~my_tooltips, hoverinfo = "text", hole = 0.3) %>%
+  add_pie(data = df_p3, labels = ~my_labels, values = ~my_values, name = "age",
+          domain = list(x = c(0.72, 0.98), y = c(0.1, 1)), 
+          textinfo='label+percent', insidetextorientation='radial',
+          text = ~my_tooltips, hoverinfo = "text", hole = 0.3) %>%
+  layout(showlegend = F,
+         xaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         yaxis = list(showgrid = FALSE, zeroline = FALSE, showticklabels = FALSE),
+         colorway = westmont_colors,
+         annotations = list(
+           list(x = 0.13 , y = 0, text = "GENDER", showarrow = F, xref='paper', yref='paper'),
+         list(x = 0.5 , y = 0, text = "RACE", showarrow = F, xref='paper', yref='paper'),
+         list(x = 0.86 , y = 0, text = "AGE", showarrow = F, xref='paper', yref='paper')
+         )) %>%
+plotly::config(displaylogo = FALSE,
+                   modeBarButtons = list(list("toImage")))
+})
+            
+  
+```
+
+
+```{r, include = FALSE}
+renderPlotly({
+  df_data %>%
+    fn_filter_weather() %>%
+    fn_filter_dates() %>%
+    filter(organization_service == "healthcare") %>%
+    select(num_med_men, num_med_women) %>%
+    summarise(female = sum(num_med_women, na.rm = TRUE),
+              male = sum(num_med_men, na.rm = TRUE)) %>%
+    pivot_longer(cols = c(female, male),
+                 names_to = "my_labels",
+                 values_to = "my_values") %>%
+    mutate(my_parents = "gender",
+           my_values = 100*my_values / sum(my_values, na.rm = TRUE)) %>%
+    
+    rbind(
+      df_data %>%
+        fn_filter_weather() %>%
+        fn_filter_dates() %>%
+        filter(organization_service == "healthcare") %>%
+        select(num_med_caucasian, num_med_black, num_med_hispanic) %>%
+        summarise(caucasian = sum(num_med_caucasian, na.rm = TRUE),
+                  black = sum(num_med_black, na.rm = TRUE),
+                  hispanic = sum(num_med_hispanic, na.rm = TRUE)) %>%
+        pivot_longer(cols = c(caucasian, black, hispanic),
+                 names_to = "my_labels",
+                 values_to = "my_values") %>%
+        mutate(my_parents = "race",
+               my_values = 100*my_values / sum(my_values, na.rm = TRUE))) %>%
+    
+    rbind(
+      df_data %>%
+        fn_filter_weather() %>%
+        fn_filter_dates() %>%
+        filter(organization_service == "healthcare") %>%
+        select(num_med_over_65, num_med_under_65) %>%
+        summarise(`under 65` = sum(num_med_under_65, na.rm = TRUE),
+              `over 65` = sum(num_med_over_65, na.rm = TRUE)) %>%
+        pivot_longer(cols = c(`under 65`, `over 65`),
+                 names_to = "my_labels",
+                 values_to = "my_values") %>%
+        mutate(my_parents = "age",
+               my_values = round(100*my_values / sum(my_values, na.rm = TRUE),1))) %>%
+  
+    rbind(data.frame(
+      my_labels = c("gender", "race", "age"),
+      my_parents = c("", "", ""),
+      my_values = c(0,0,0))) %>%
+    plot_ly(labels = ~my_labels,
+            parents = ~my_parents,
+            values = ~my_values,
+            type = "treemap",
+            tiling = list(packing = "dice-slice")) %>%
+        layout(colorway = westmont_colors,
+               annotations =
+                 list(x = 0.5, 
+                      y = -0.2, 
+                      text = "Click a sector to expand",
+                      showarrow = FALSE,
+                      font=list(size=15))) %>%
+    plotly::config(displaylogo = FALSE,
+                   modeBarButtons = list(list("toImage")))
+})
+```   
+
+
+### Volunteer role breakdown
+
+```{r}
+renderPlotly({
+  df_data %>%
+    fn_filter_weather() %>%
+    fn_filter_dates() %>%
+    filter(organization_name == "doctors_without_walls") %>%
+    select(Clinicians = num_clinicians, 
+           Packs = num_packs, 
+           Scribes = num_scribes, 
+           CCS = num_ccs, 
+           Peacekeepers = num_peacekeepers) %>%
+    gather(key = "dww_role", value = "dww_value") %>%
+    group_by(dww_role) %>%
+    summarise(count = sum(dww_value, na.rm = TRUE)) %>%
+    plot_ly(labels = ~dww_role, values = ~count, type = "pie", hole = 0.2,
+            textinfo='label+percent',
+               insidetextorientation='radial',
+            showlegend = FALSE) %>%
+    layout(colorway = westmont_colors) %>%
+    plotly::config(displaylogo = FALSE,
+                   modeBarButtons = list(list("toImage")))
+})
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+<style>
+
+.section.sidebar {
+background-color: white;
+}
+
+
+.navbar{
+background-color: #9D2235;
+border-color: #9D2235;
+}
+
+
+.navbar-inverse {
+background-color: #9D2235;
+border-color: #9D2235;
+}
+
+.navbar-inverse .navbar-brand {
+color: #ffffff;
+}
+
+.navbar-inverse .navbar-brand:hover,
+.navbar-inverse .navbar-brand:focus {
+color: #ffffff;
+background-color: none;
+}
+
+.navbar-inverse .navbar-text {
+
+color: #ffffff;
+
+}
+
+.navbar-inverse .navbar-nav > li > a {
+
+color: #ffffff;
+
+}
+
+.navbar-inverse .navbar-nav > li > a:hover,
+
+.navbar-inverse .navbar-nav > li > a:focus {
+
+color: #ffffff;
+
+background-color: #63666A;
+
+}
+
+.navbar-inverse .navbar-nav > .active > a,
+
+.navbar-inverse .navbar-nav > .active > a:hover,
+
+.navbar-inverse .navbar-nav > .active > a:focus {
+
+color: #ffffff;
+
+background-color: #63666A;
+
+}
+
+.navbar-inverse .navbar-nav > .disabled > a,
+
+.navbar-inverse .navbar-nav > .disabled > a:hover,
+
+.navbar-inverse .navbar-nav > .disabled > a:focus {
+
+color: #ffffff;
+
+background-color: transparent;
+
+}
+
+.navbar-inverse .navbar-toggle {
+
+border-color: transparent;
+
+}
+
+.navbar-inverse .navbar-toggle:hover,
+
+.navbar-inverse .navbar-toggle:focus {
+
+background-color: #63666A;
+
+}
+
+.navbar-inverse .navbar-toggle .icon-bar {
+
+background-color: #ffffff;
+
+}
+
+.navbar-inverse .navbar-collapse,
+
+.navbar-inverse .navbar-form {
+
+border-color: #1a6ecc;
+
+}
+
+.navbar-inverse .navbar-nav > .open > a,
+
+.navbar-inverse .navbar-nav > .open > a:hover,
+
+.navbar-inverse .navbar-nav > .open > a:focus {
+
+background-color: #63666A;
+
+color: #ffffff;
+
+}
+
+@media (max-width: 767px) {
+
+.navbar-inverse .navbar-nav .open .dropdown-menu > .dropdown-header {
+
+border-color: #63666A;
+
+}
+
+.navbar-inverse .navbar-nav .open .dropdown-menu .divider {
+
+background-color: #63666A;
+
+}
+
+.navbar-inverse .navbar-nav .open .dropdown-menu > li > a {
+
+color: #ffffff;
+
+}
+
+.navbar-inverse .navbar-nav .open .dropdown-menu > li > a:hover,
+
+.navbar-inverse .navbar-nav .open .dropdown-menu > li > a:focus {
+
+color: #ffffff;
+
+background-color: #63666A;
+
+}
+
+.navbar-inverse .navbar-nav .open .dropdown-menu > .active > a,
+
+.navbar-inverse .navbar-nav .open .dropdown-menu > .active > a:hover,
+
+.navbar-inverse .navbar-nav .open .dropdown-menu > .active > a:focus {
+
+color: #ffffff;
+
+background-color: #63666A;
+
+}
+
+.navbar-inverse .navbar-nav .open .dropdown-menu > .disabled > a,
+
+.navbar-inverse .navbar-nav .open .dropdown-menu > .disabled > a:hover,
+
+.navbar-inverse .navbar-nav .open .dropdown-menu > .disabled > a:focus {
+
+color: #ffffff;
+
+background-color: transparent;
+
+}
+
+}
+
+.navbar-inverse .navbar-link {
+
+color: #ffffff;
+
+}
+
+.navbar-inverse .navbar-link:hover {
+
+color: #ffffff;
+
+}
+
+.navbar-inverse .btn-link {
+
+color: #ffffff;
+
+}
+
+.navbar-inverse .btn-link:hover,
+
+.navbar-inverse .btn-link:focus {
+
+color: #ffffff;
+
+}
+
+.navbar-inverse .btn-link[disabled]:hover,
+
+fieldset[disabled] .navbar-inverse .btn-link:hover,
+
+.navbar-inverse .btn-link[disabled]:focus,
+
+fieldset[disabled] .navbar-inverse .btn-link:focus {
+
+color: #ffffff;
+
+}
+
+
+
+</style>
