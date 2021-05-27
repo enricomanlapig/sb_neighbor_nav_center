@@ -73,6 +73,7 @@ df_data <- read_excel(path = path.expand(kobo_xl))
 
 ```{r rename_variables}
 names(df_data) <- gsub("organization_group/", "", names(df_data))
+names(df_data) <- gsub("doctors_without_walls_grp/", "", names(df_data))
 names(df_data) <- gsub("healthcare_group/med_encounters_group/", "", names(df_data))
 names(df_data) <- gsub("healthcare_group/health_volunteer_group/", "", names(df_data))
 names(df_data) <- gsub("healthcare_group/med_mental_group/", "", names(df_data))
@@ -86,6 +87,7 @@ names(df_data) <- gsub("clothing_group/", "", names(df_data))
 names(df_data) <- gsub("meals_group/", "", names(df_data))
 names(df_data) <- gsub("meal_role/", "", names(df_data))
 names(df_data) <- gsub("coordinator_group/", "", names(df_data))
+names(df_data) <- gsub("compassionate_care_group/", "", names(df_data))
 names(df_data) <- gsub("weather/", "", names(df_data))
 
 
@@ -153,9 +155,7 @@ df_data %>%
 
 
 
-```
 
-```{r remove_duplicate_surveys}
 df_data %>% 
   unique() %>%
   group_by(survey_date, organization_service, organization_name) %>%
@@ -430,12 +430,12 @@ renderValueBox({
 ```
 
 
-### New case management clients
+### Case management clients served
 
 ```{r, echo = FALSE}
 renderValueBox({
-  valueBox(fn_value_box(df_data, num_shelter_referrals),
-           icon = "fa-bed",
+  valueBox(fn_value_box(df_data, num_case_mgmt_clients),
+           icon = "fa-user-plus",
            color = westmont_green)
 })
 ```
@@ -730,7 +730,7 @@ renderPlotly({
 ```
 
 
-Case Management & Exits {data-orientation=rows}
+Case Management & Compassionate Care {data-orientation=rows}
 ======================
 
 Row 
@@ -738,22 +738,8 @@ Row
 
 
 
-### Number of people served
+### Number of case management clients served
 
-
-```{r}
-
-renderPlotly({
-  fn_time_series_graph(df_data, num_case_mgmt_served)
-})
-
-```
-
-
-Row 
------------------------------------------------------------------------
-
-### Number of clients served
 
 ```{r}
 
@@ -764,23 +750,37 @@ renderPlotly({
 ```
 
 
-### Number of non-clients served
+### Number of diversions initiated
 
 ```{r}
 
 renderPlotly({
-  fn_time_series_graph(df_data, num_case_mgmt_non_clients)
+  fn_time_series_graph(df_data, num_diversions_initiated)
+})
+
+```
+
+
+Row 
+-----------------------------------------------------------------------
+
+### Number of compassionate care
+
+```{r}
+
+renderPlotly({
+  fn_time_series_graph(df_data, num_ppl_compassionate_care)
 })
 
 ```
 
 
 
-### Number of new clients
+### Number of agency referrals
 
 ```{r}
 renderPlotly({
-  fn_time_series_graph(df_data, num_case_mgmt_new_clients)
+  fn_time_series_graph(df_data, num_agency_referrals)
 })
 ```
 

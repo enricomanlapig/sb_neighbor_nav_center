@@ -1,0 +1,12 @@
+name: neighbornavcenterdashboard
+title:
+username:
+account: enricomanlapig
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3898341
+bundleId: 4561641
+url: https://enricomanlapig.shinyapps.io/neighbornavcenterdashboard/
+when: 1620239494.08831
+asMultiple: FALSE
+asStatic: FALSE
