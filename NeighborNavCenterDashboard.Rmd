@@ -764,7 +764,7 @@ renderPlotly({
 Row 
 -----------------------------------------------------------------------
 
-### Number of compassionate care
+### Number of indivuals receiving compassionate care
 
 ```{r}
 
@@ -799,7 +799,7 @@ Row
 
 ```{r}
 renderPlotly({
-  fn_time_series_graph(df_data, num_med_encounters, organization_service == "healthcare")
+  fn_time_series_graph(df_data, num_med_encounters)
 })
 
 
@@ -821,7 +821,7 @@ renderPlotly({
   df_data %>%
   fn_filter_weather() %>%
   fn_filter_dates() %>%
-  filter(organization_service == "healthcare") %>%
+  #filter(organization_service == "healthcare") %>%
   select(num_med_men, num_med_women) %>%
   summarise(female = sum(num_med_women, na.rm = TRUE),
             male = sum(num_med_men, na.rm = TRUE)) %>%
@@ -834,7 +834,7 @@ renderPlotly({
 df_data %>%
        fn_filter_weather() %>%
         fn_filter_dates() %>%
-        filter(organization_service == "healthcare") %>%
+        #filter(organization_service == "healthcare") %>%
         select(num_med_caucasian, num_med_black, num_med_hispanic) %>%
         summarise(caucasian = sum(num_med_caucasian, na.rm = TRUE),
                   black = sum(num_med_black, na.rm = TRUE),
@@ -848,7 +848,7 @@ df_data %>%
 df_data %>%
         fn_filter_weather() %>%
         fn_filter_dates() %>%
-        filter(organization_service == "healthcare") %>%
+        #filter(organization_service == "healthcare") %>%
         select(num_med_over_65, num_med_under_65) %>%
         summarise(`under 65` = sum(num_med_under_65, na.rm = TRUE),
               `over 65` = sum(num_med_over_65, na.rm = TRUE)) %>%
@@ -893,7 +893,7 @@ renderPlotly({
   df_data %>%
     fn_filter_weather() %>%
     fn_filter_dates() %>%
-    filter(organization_service == "healthcare") %>%
+    #filter(organization_service == "healthcare") %>%
     select(num_med_men, num_med_women) %>%
     summarise(female = sum(num_med_women, na.rm = TRUE),
               male = sum(num_med_men, na.rm = TRUE)) %>%
@@ -907,7 +907,7 @@ renderPlotly({
       df_data %>%
         fn_filter_weather() %>%
         fn_filter_dates() %>%
-        filter(organization_service == "healthcare") %>%
+        #filter(organization_service == "healthcare") %>%
         select(num_med_caucasian, num_med_black, num_med_hispanic) %>%
         summarise(caucasian = sum(num_med_caucasian, na.rm = TRUE),
                   black = sum(num_med_black, na.rm = TRUE),
@@ -922,7 +922,7 @@ renderPlotly({
       df_data %>%
         fn_filter_weather() %>%
         fn_filter_dates() %>%
-        filter(organization_service == "healthcare") %>%
+        #filter(organization_service == "healthcare") %>%
         select(num_med_over_65, num_med_under_65) %>%
         summarise(`under 65` = sum(num_med_under_65, na.rm = TRUE),
               `over 65` = sum(num_med_over_65, na.rm = TRUE)) %>%
