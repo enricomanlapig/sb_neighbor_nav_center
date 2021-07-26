@@ -1,12 +1,14 @@
-name: neighbornavcenterdashboard
-title:
+name: NeighborNavCenterDashboard
+title: NeighborNavCenterDashboard
 username:
 account: enricomanlapig
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 3898341
-bundleId: 4645133
+bundleId: 4857807
 url: https://enricomanlapig.shinyapps.io/neighbornavcenterdashboard/
-when: 1622093704.7059
+when: 1627324624.84372
+lastSyncTime: 1627324624.84372
 asMultiple: FALSE
 asStatic: FALSE
+ignoredFiles: neighborhood_nav.xlsx

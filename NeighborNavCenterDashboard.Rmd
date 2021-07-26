@@ -508,6 +508,7 @@ Partners {data-orientation=cols}
 renderPlotly({
   df_data %>%
     fn_filter_weather() %>%
+    fn_filter_dates() %>%
     select(survey_date, 
            my_labels = organization_name, 
            my_parents = organization_service) %>%
