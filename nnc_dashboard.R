@@ -26,8 +26,9 @@ GET(url,
 df_data <- read_excel(path = path.expand(kobo_xl))
 
 
-
 ### Rename variables
+df_data$sub_time <- gsub("[A-Z]", " ", df_data$`_submission_time`)
+df_data$sub_time <- as.POSIXlt(df_data$sub_time)
 
 names(df_data) <- gsub("organization_group/", "", names(df_data))
 names(df_data) <- gsub("doctors_without_walls_grp/", "", names(df_data))
@@ -49,6 +50,7 @@ names(df_data) <- gsub("weather/", "", names(df_data))
 v_weather_levels <- c("cold", "comfortable", "warm", "rainy", "foggy", "smokey", "unknown")
 v_warming_station_levels <- c("yes", "no", "unknown")
 v_service_categories <- c("animals", "clothing", "case_mgmt", "coordinator", "healthcare", "meals", "hygiene", "exits", "other_service")
+
 df_data %>%
   mutate(survey_date = round_date(df_data$survey_date, unit = "week", week_start = 4),
          weather = factor(weather, levels = v_weather_levels),
@@ -113,9 +115,8 @@ df_data %>%
 # Only keep last entry
 
 df_data %>% 
-  unique() %>%
-  group_by(survey_date, organization_service, organization_name) %>%
-  filter(today == max(today, na.rm = TRUE)) %>%
+  group_by(survey_date, organization_name) %>%
+  filter(sub_time == max(sub_time, na.rm = TRUE)) %>%
   ungroup() -> df_data
 
 
