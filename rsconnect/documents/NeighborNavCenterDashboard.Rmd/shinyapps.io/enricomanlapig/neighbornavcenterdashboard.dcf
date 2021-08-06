@@ -5,10 +5,10 @@ account: enricomanlapig
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 3898341
-bundleId: 4857807
+bundleId: 4896942
 url: https://enricomanlapig.shinyapps.io/neighbornavcenterdashboard/
-when: 1627324624.84372
-lastSyncTime: 1627324624.84372
+when: 1628286513.69686
+lastSyncTime: 1628286513.69686
 asMultiple: FALSE
 asStatic: FALSE
 ignoredFiles: neighborhood_nav.xlsx
