@@ -333,4 +333,5 @@ df_data %>%
          num_diversions_initiated,
          num_ppl_compassionate_care,
          num_agency_referrals,
-         num_people_remaining) -> df_download
+         num_people_remaining) %>%
+  arrange(desc(survey_date)) -> df_download
