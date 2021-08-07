@@ -52,10 +52,11 @@ v_warming_station_levels <- c("yes", "no", "unknown")
 v_service_categories <- c("animals", "clothing", "case_mgmt", "coordinator", "healthcare", "meals", "hygiene", "exits", "other_service")
 
 df_data %>%
-  mutate(survey_date = round_date(df_data$survey_date, unit = "week", week_start = 4),
+  mutate(survey_date = as.Date(survey_date, "%m/%d/%y", tz ="America/Los_Angeles"),
+         survey_date = round_date(df_data$survey_date, unit = "week", week_start = 4),
          weather = factor(weather, levels = v_weather_levels),
          warming_station = factor(warming_station, levels = v_warming_station_levels),
-         survey_date = as.Date(survey_date, "%m/%d/%y", tz ="America/Los_Angeles"),
+         
          start = as.Date(start, "%m/%d/%y", tz ="America/Los_Angeles"),
          end = as.Date(end, "%m/%d/%y", tz ="America/Los_Angeles"),
          organization_name = case_when(
